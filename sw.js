@@ -1,6 +1,6 @@
 // Guarda o app no celular para abrir sem internet.
 // Ao mudar qualquer arquivo do app, aumente a VERSAO para os celulares baixarem de novo.
-const VERSAO = 'diario-v4';
+const VERSAO = 'diario-v5';
 const ARQUIVOS = [
   './',
   './index.html',

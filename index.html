@@ -203,6 +203,16 @@ h2.display { font-size: 34px; }
 .sync.pend .dot { background: var(--gold); }
 .sync.off .dot { background: var(--faint); }
 .sync.erro .dot { background: var(--danger); }
+.sug { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--line-2); border-left: 3px solid var(--gold); border-radius: 4px; padding: 10px 12px; }
+.sug-main { margin: 0; font-size: 15px; }
+.sug-main strong { font-family: var(--display); font-size: 20px; color: var(--gold); }
+.sug .small-btn { align-self: flex-start; color: var(--fg); }
+.fb { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+.fb-opcoes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.fb-chip { border-radius: 4px; min-height: 52px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; text-align: left; gap: 2px; padding: 6px 10px; }
+.fb-chip small { font-size: 11px; opacity: 0.8; font-weight: 400; }
+.fb .chip.dor { align-self: flex-start; border-radius: 4px; }
+.fb .chip.dor[aria-pressed="true"] { background: var(--danger); border-color: var(--danger); color: #fff; }
 .guia-btn { align-self: flex-start; color: var(--gold); padding: 4px 0; min-height: 40px; }
 .guia { display: flex; flex-direction: column; gap: 8px; background: var(--bg); border-radius: 4px; padding: 12px; }
 .guia-svg { width: 100%; max-width: 360px; height: auto; display: block; margin: 0 auto; }
@@ -358,6 +368,132 @@ h2.display { font-size: 34px; }
     if (!u) return 'última vez: primeiro registro';
     const partes = u.series.map((x) => ex.tipo === 'tempo' ? (fmt(x.seg, 0) + ' s') : (fmt(x.kg) + ' × ' + fmt(x.reps, 0)));
     return 'última vez (' + curta(u.data) + '): ' + partes.join(', ');
+  }
+
+  /* ---------- Feedback por exercício e sugestão de carga ---------- */
+  // Menor salto de carga por exercício (kg). Halteres e polia sobem menos que máquina de perna.
+  const PASSO = { 'leg-press': 10, 'cadeira-flexora': 5, 'agachamento-goblet': 2, 'supino-inclinado-halteres': 2, 'rosca-direta': 1, 'triceps-corda': 2.5, 'elevacao-pelvica': 5, 'stiff-halteres': 1 };
+  const passoDe = (id) => PASSO[id] || 5;
+  const REPS_TOPO = 12, REPS_BASE = 10;
+  function esforcos(fase) {
+    const f1 = fase === 1;
+    return [
+      { v: 'leve', rotulo: 'Leve', dica: f1 ? 'sobraram 5 ou mais' : 'sobraram 4 ou mais' },
+      { v: 'ok', rotulo: 'No ponto', dica: f1 ? 'sobraram 3–4' : 'sobraram 2–3' },
+      { v: 'pesado', rotulo: 'Pesado', dica: f1 ? 'sobraram 0–2' : 'sobraram 0–1' },
+      { v: 'falhou', rotulo: 'Não completei', dica: 'faltaram repetições' }
+    ];
+  }
+  const ROTULO_ESFORCO = { leve: 'leve', ok: 'no ponto', pesado: 'pesado', falhou: 'não completei' };
+  function ultimoRegistro(exId) {
+    for (const s of sessoesAnteriores()) {
+      const e = s.exercicios && s.exercicios[exId];
+      if (e && Array.isArray(e.series)) {
+        const feitas = e.series.filter((x) => x.feita);
+        if (feitas.length) return { data: s.data, series: feitas, fb: e.feedback || {} };
+      }
+    }
+    return null;
+  }
+  function sugestaoAuto(ex, fase) {
+    const u = ultimoRegistro(ex.id);
+    if (!u) return null;
+    const fb = u.fb || {};
+    const ref = fb.esforco ? ' (você marcou "' + ROTULO_ESFORCO[fb.esforco] + '" em ' + curta(u.data) + ')' : '';
+    if (ex.tipo === 'tempo') {
+      const seg = u.series.map((x) => x.seg).filter((v) => v != null);
+      if (!seg.length) return null;
+      const menor = Math.min.apply(null, seg);
+      if (fb.dor) return { acao: 'manter', seg: menor, motivo: 'Você marcou desconforto. Mantenha o tempo e me conte como foi.' };
+      if (fb.esforco === 'falhou') return { acao: 'reduzir', seg: Math.max(15, menor - 5), motivo: 'Faltou tempo na última vez' + ref + '.' };
+      if (menor >= 30 && (fb.esforco === 'leve' || fb.esforco === 'ok')) return { acao: 'aumentar', seg: Math.min(45, menor + 5), motivo: 'Segurou 30 s em todas' + ref + '.' };
+      return { acao: 'manter', seg: menor, motivo: menor >= 30 ? 'Segurou 30 s. Marque como foi para eu saber se dá para subir.' : 'Busque 30 s em todas as séries.' };
+    }
+    const kgs = u.series.map((x) => x.kg).filter((v) => v != null);
+    if (!kgs.length) return null;
+    const topo = Math.max.apply(null, kgs);
+    const trabalho = u.series.filter((x) => x.kg === topo);
+    const repsMin = Math.min.apply(null, trabalho.map((x) => x.reps == null ? 0 : x.reps));
+    const passo = passoDe(ex.id);
+    let acao = 'manter', kg = topo, motivo;
+    if (fb.dor) {
+      motivo = 'Você marcou dor ou desconforto. Mantenha (ou reduza) e me conte como foi.';
+    } else if (fb.esforco === 'falhou' || repsMin < REPS_BASE - 2) {
+      acao = 'reduzir'; kg = Math.max(0, topo - passo);
+      motivo = 'Ficou abaixo de ' + REPS_BASE + ' repetições' + ref + '. Desça um degrau e refaça a faixa.';
+    } else if (repsMin >= REPS_TOPO) {
+      if (fb.esforco === 'leve' || fb.esforco === 'ok') { acao = 'aumentar'; kg = topo + passo; motivo = 'Fez ' + REPS_TOPO + ' em todas as séries de trabalho' + ref + '.'; }
+      else if (fb.esforco === 'pesado') motivo = 'Chegou em ' + REPS_TOPO + ', mas no limite' + ref + '. Repita a carga até ficar no ponto.';
+      else motivo = 'Fez ' + REPS_TOPO + ' em todas. Se sobrarem 2–3 repetições, suba ' + fmt(passo) + ' kg. Marque como foi para a sugestão ficar certa.';
+    } else if (repsMin >= REPS_BASE) {
+      motivo = 'Busque ' + REPS_TOPO + ' repetições com essa carga antes de subir' + ref + '.';
+      if (fb.esforco === 'pesado') motivo = 'Ficou pesado' + ref + '. Mantenha e tente somar 1 repetição.';
+    } else {
+      if (fb.esforco === 'pesado') { acao = 'reduzir'; kg = Math.max(0, topo - passo); motivo = 'Abaixo de ' + REPS_BASE + ' e pesado' + ref + '. Desça um degrau.'; }
+      else motivo = 'Busque pelo menos ' + REPS_BASE + ' repetições com essa carga' + ref + '.';
+    }
+    // Mantém o seu padrão de séries: as mais leves (aproximação) ficam, as de trabalho levam a carga nova.
+    const series = u.series.map((x) => (x.kg === topo ? kg : Math.min(x.kg == null ? kg : x.kg, kg)));
+    return { acao, kg, series, motivo };
+  }
+  function sugestaoClaude(ex) {
+    const todas = st.config && st.config.sugestoes;
+    const sg = todas && todas[ex.id];
+    if (!sg || !sg.em) return null;
+    // Vale até o próximo treino desse exercício: depois dele, preciso de feedback novo.
+    const u = ultimoRegistro(ex.id);
+    if (u && u.data > sg.em) return null;
+    return sg;
+  }
+  function sugestaoDe(ex, fase) {
+    const c = sugestaoClaude(ex);
+    if (c) return Object.assign({ fonte: 'claude' }, c);
+    const a = sugestaoAuto(ex, fase);
+    return a ? Object.assign({ fonte: 'auto' }, a) : null;
+  }
+  const SETA = { aumentar: 'subir ↑', manter: 'manter', reduzir: 'descer ↓' };
+  function blocoSugestao(s, ex) {
+    const sg = sugestaoDe(ex, s.fase);
+    if (!sg) return '';
+    const tempo = ex.tipo === 'tempo';
+    const valor = tempo ? (sg.seg != null ? fmt(sg.seg, 0) + ' s' : '') : (sg.kg != null ? fmt(sg.kg) + ' kg' : '');
+    const lista = !tempo && Array.isArray(sg.series) && sg.series.some((k) => k !== sg.kg) ? sg.series.map((k) => fmt(k)).join(' · ') + ' kg' : '';
+    let h = '<div class="sug"><div class="top"><span class="eyebrow">Sugestão de hoje</span><span class="note">' +
+      (sg.fonte === 'claude' ? 'do Claude' + (sg.em ? ' · ' + esc(curta(sg.em)) : '') : 'automática') + '</span></div>' +
+      '<p class="sug-main">' + (valor ? '<strong>' + esc(valor) + '</strong> · ' : '') + esc(SETA[sg.acao] || sg.acao || '') + '</p>' +
+      (lista ? '<p class="note">Por série: ' + esc(lista) + '</p>' : '') +
+      (sg.motivo ? '<p class="note">' + esc(sg.motivo) + '</p>' : '');
+    const livres = s.exercicios[ex.id].series.some((x) => !x.feita);
+    if (s.status !== 'concluido' && livres && (valor || lista)) h += '<button type="button" class="small-btn" data-acao="usar-sug" data-ex="' + esc(ex.id) + '">Usar nas séries</button>';
+    return h + '</div>';
+  }
+  function aplicarSugestao(s, ex) {
+    const sg = sugestaoDe(ex, s.fase);
+    if (!sg) return;
+    s.exercicios[ex.id].series.forEach((x, i) => {
+      if (x.feita) return;
+      if (ex.tipo === 'tempo') { if (sg.seg != null) x.seg = sg.seg; return; }
+      const k = Array.isArray(sg.series) && sg.series.length ? sg.series[Math.min(i, sg.series.length - 1)] : sg.kg;
+      if (k != null) x.kg = k;
+    });
+  }
+  function blocoFeedback(s, ex) {
+    const e = s.exercicios[ex.id];
+    if (!e.series.some((x) => x.feita)) return '';
+    const fb = e.feedback || {};
+    let h = '<div class="fb"><div class="top"><span class="eyebrow">Como foi?</span><span class="note">vai para a planilha</span></div>' +
+      '<div class="fb-opcoes" role="group" aria-label="Esforço em ' + esc(ex.nome) + '">';
+    esforcos(s.fase).forEach((o) => {
+      h += '<button type="button" class="chip fb-chip" data-acao="fb" data-ex="' + esc(ex.id) + '" data-v="' + o.v + '" aria-pressed="' + (fb.esforco === o.v) + '"><span>' + esc(o.rotulo) + '</span><small>' + esc(o.dica) + '</small></button>';
+    });
+    h += '</div><button type="button" class="chip dor" data-acao="fb-dor" data-ex="' + esc(ex.id) + '" aria-pressed="' + (!!fb.dor) + '">Senti dor ou desconforto</button>' +
+      '<label class="sr" for="fbn-' + esc(ex.id) + '">Observação sobre ' + esc(ex.nome) + '</label>' +
+      '<input class="field" style="text-align:left;font-size:15px" id="fbn-' + esc(ex.id) + '" maxlength="160" placeholder="Observação (opcional): máquina, pegada, onde sentiu…" value="' + esc(fb.nota || '') + '" data-fbnota="' + esc(ex.id) + '">';
+    if (st.fbPendente === ex.id) {
+      const prox = listaDoDia(s).find((x) => x.id !== ex.id && !exercicioFeito(s, x));
+      h += '<button type="button" class="secondary" data-acao="fb-seguir" data-ex="' + esc(ex.id) + '">' + (prox ? 'Próximo: ' + esc(prox.nome) : 'Seguir') + '</button>';
+    }
+    return h + '</div>';
   }
 
   /* ---------- Semana, peso e estimativas (fase 2) ---------- */
@@ -640,15 +776,17 @@ h2.display { font-size: 34px; }
       if (!aberto) {
         const e = s.exercicios[ex.id];
         const nf = e.series.filter((x) => x.feita).length;
+        const rot = e.feedback && e.feedback.esforco ? ' · ' + ROTULO_ESFORCO[e.feedback.esforco] : (feito ? ' · sem feedback' : '');
         h += '<button type="button" class="row-btn" data-acao="abrir" data-ex="' + ex.id + '">' +
           '<span class="plate sm' + (feito ? ' done' : '') + '" aria-hidden="true" style="background:' + pl.bg + ';color:' + pl.fg + '">' + (feito ? '✓' : (i + 1)) + '</span>' +
-          '<span class="nm">' + esc(ex.nome) + '</span><span class="meta">' + (nf ? nf + '/' + e.series.length : esc(ex.tipo === 'tempo' ? PRANCHA.meta : FASES[fase].meta)) + '</span></button>';
+          '<span class="nm">' + esc(ex.nome) + '</span><span class="meta">' + (nf ? nf + '/' + e.series.length + esc(rot) : esc(ex.tipo === 'tempo' ? PRANCHA.meta : FASES[fase].meta)) + '</span></button>';
         return;
       }
       h += '<section class="card" aria-label="' + esc(ex.nome) + '">' +
         '<div class="ex-head"><span class="plate" aria-hidden="true" style="background:' + pl.bg + ';color:' + pl.fg + '">' + (i + 1) + '</span>' +
         '<div style="flex:1;min-width:0"><h2 class="ex-name">' + esc(ex.nome) + '</h2>' +
         '<p class="ex-meta">' + esc(metaTexto(ex, fase)) + '</p><p class="ex-meta">' + esc(textoUltima(ex)) + '</p></div></div>';
+      h += blocoSugestao(s, ex);
       h += blocoGuia(ex);
       if (ex.tipo === 'tempo') {
         h += '<div class="grid-head" style="grid-template-columns:44px minmax(0,1fr) 52px"><span>Série</span><span>Segundos</span><span></span></div>';
@@ -673,6 +811,7 @@ h2.display { font-size: 34px; }
             '<button type="button" class="check" data-acao="serie" data-ex="' + ex.id + '" data-i="' + j + '" aria-pressed="' + (x.feita ? 'true' : 'false') + '" aria-label="Série ' + (j + 1) + (x.feita ? ' feita, desfazer' : ' feita') + '">' + ICON_CHECK + '</button></div>';
         }
       });
+      h += blocoFeedback(s, ex);
       h += '</section>';
     });
 
@@ -748,6 +887,9 @@ h2.display { font-size: 34px; }
       (s.minima ? ' Versão mínima.' : '') + '</p>' +
       (textoKcal(s) ? '<p class="note">' + textoKcal(s) + ' (estimativa).</p>' : (s.esteira.feita && !pesoNaData(s.data) ? '<p class="note">Registre o peso para ver a estimativa de gasto da esteira.</p>' : '')) +
       '<p class="note">Semana: ' + (treinosDaSemana(segundaDaSemana(s.data)).filter((x) => docId(x) !== docId(s)).length + 1) + ' de ' + TREINOS_POR_SEMANA + ' treinos.</p></section>';
+    const comFb = lista.filter((ex) => (s.exercicios[ex.id].series || []).some((x) => x.feita));
+    const semFb = comFb.filter((ex) => !(s.exercicios[ex.id].feedback && s.exercicios[ex.id].feedback.esforco));
+    if (comFb.length) h += '<p class="note">' + (semFb.length ? 'Sem feedback: ' + esc(semFb.map((ex) => ex.nome).join(', ')) + '. Sem ele, a sugestão do próximo treino fica menos precisa.' : 'Feedback registrado em todos os exercícios.') + '</p>';
     h += escala('energiaDepois', 'Energia agora', s);
     h += escala('humorDepois', 'Humor agora', s);
     h += '<p class="note">Próximo: Treino ' + (s.treino === 'A' ? 'B' : 'A') + '. Agora, a refeição do plano e uma fruta.</p>';
@@ -1061,6 +1203,17 @@ h2.display { font-size: 34px; }
   function lerCampos() {
     if (!st.sessao) return;
     document.querySelectorAll('#app input[data-campo]').forEach((inp) => atualizarCampo(inp));
+    document.querySelectorAll('#app input[data-fbnota]').forEach((inp) => lerNota(inp));
+  }
+  function lerNota(inp) {
+    const s = st.sessao; if (!s) return false;
+    const e = s.exercicios[inp.dataset.fbnota]; if (!e) return false;
+    const v = inp.value.trim();
+    const antes = (e.feedback && e.feedback.nota) || '';
+    if (v === antes) return false;
+    e.feedback = Object.assign({}, e.feedback, { nota: v });
+    if (!v) delete e.feedback.nota;
+    return true;
   }
   function atualizarCampo(inp) {
     const s = st.sessao; if (!s) return;
@@ -1083,12 +1236,17 @@ h2.display { font-size: 34px; }
     }
   });
 
+  document.getElementById('app').addEventListener('change', (ev) => {
+    const inp = ev.target.closest('input[data-fbnota]');
+    if (inp && lerNota(inp)) salvarSessao();
+  });
+
   document.getElementById('app').addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-acao]');
     if (!b) return;
     const acao = b.dataset.acao;
     const s = st.sessao;
-    if (acao === 'abrir') { lerCampos(); st.aberto = st.aberto === b.dataset.ex ? null : b.dataset.ex; render(); return; }
+    if (acao === 'abrir') { lerCampos(); st.fbPendente = null; st.aberto = st.aberto === b.dataset.ex ? null : b.dataset.ex; render(); return; }
     if (acao === 'minima') {
       lerCampos(); s.minima = !s.minima;
       if (st.sessaoSalva || seriesFeitas(s)) salvarSessao();
@@ -1115,8 +1273,10 @@ h2.display { font-size: 34px; }
         }
         x.feita = true;
         if (exercicioFeito(s, ex)) {
-          st.aberto = primeiroAberto(s);
-          const prox = listaDoDia(s).find((e2) => e2.id === st.aberto);
+          const fbAtual = s.exercicios[ex.id].feedback;
+          if (fbAtual && fbAtual.esforco) st.aberto = primeiroAberto(s);
+          else { st.fbPendente = ex.id; st.aberto = ex.id; }
+          const prox = listaDoDia(s).find((e2) => e2.id === primeiroAberto(s));
           iniciarDescanso(prox ? 'Descanso · próximo: ' + prox.nome : 'Descanso');
         } else {
           iniciarDescanso('Descanso · série ' + (Number(b.dataset.i) + 2) + ' de ' + ex.nome);
@@ -1142,6 +1302,27 @@ h2.display { font-size: 34px; }
       st.guias[b.dataset.ex] = !st.guias[b.dataset.ex];
       render(); return;
     }
+    if (acao === 'usar-sug') {
+      lerCampos();
+      const ex = exsDaSessao(s).find((e) => e.id === b.dataset.ex);
+      if (ex) { aplicarSugestao(s, ex); if (st.sessaoSalva) salvarSessao(); toast('Sugestão aplicada nas séries que faltam.'); }
+      render(); return;
+    }
+    if (acao === 'fb' || acao === 'fb-dor') {
+      lerCampos();
+      const e = s.exercicios[b.dataset.ex]; if (!e) return;
+      const fb = Object.assign({}, e.feedback);
+      if (acao === 'fb') fb.esforco = fb.esforco === b.dataset.v ? undefined : b.dataset.v;
+      else fb.dor = !fb.dor;
+      if (!fb.esforco) delete fb.esforco;
+      if (!fb.dor) delete fb.dor;
+      e.feedback = fb;
+      salvarSessao(); render(); return;
+    }
+    if (acao === 'fb-seguir') {
+      lerCampos(); salvarSessao();
+      st.fbPendente = null; st.aberto = primeiroAberto(s); render(); return;
+    }
     if (acao === 'ex-evo') { st.exEvo = b.dataset.ex; render(); return; }
     if (acao === 'checkin') {
       lerCampos();
@@ -1153,7 +1334,7 @@ h2.display { font-size: 34px; }
     }
     if (acao === 'fase') {
       const v = b.dataset.v;
-      store.config = { fase: v === 'auto' ? null : Number(v), atualizadoEm: new Date().toISOString() };
+      store.config = Object.assign({}, store.config, { fase: v === 'auto' ? null : Number(v), atualizadoEm: new Date().toISOString() });
       espelhar(); enfileirar({ tipo: 'config', dados: store.config });
       regenerarSeLivre(); render();
       toast(v === 'auto' ? 'Fase pela data.' : 'Fase ' + v + ' a partir do próximo treino.');
