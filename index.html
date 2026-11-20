@@ -216,6 +216,11 @@ h2.display { font-size: 34px; }
 .guia-svg .eq-fino { stroke: var(--line-2); stroke-width: 2.5; }
 .guia-svg .eq-forte { fill: var(--gold); stroke: var(--gold); stroke-width: 2.5; stroke-linecap: round; }
 .guia-svg .cabo { stroke: var(--faint); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.guia-fotos { position: relative; width: 100%; aspect-ratio: 3 / 2; max-width: 100%; border-radius: 4px; overflow: hidden; background: var(--surface-2); }
+.guia-fotos img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; }
+.guia-fotos img.on { opacity: 1; }
+@media (prefers-reduced-motion: no-preference) { .guia-fotos img { transition: opacity 250ms ease; } }
+.guia-rotulo { position: absolute; left: 8px; bottom: 8px; background: rgba(30,33,36,0.85); color: #ECEDEE; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 8px; border-radius: 3px; }
 .guia-dicas { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
 .guia-video { color: var(--muted); font-size: 13px; padding: 6px 0; }
 .cx-field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
@@ -715,7 +720,11 @@ h2.display { font-size: 34px; }
     let h = '<button type="button" class="link-btn guia-btn" data-acao="guia" data-ex="' + esc(ex.id) + '" aria-expanded="' + aberto + '">' + (aberto ? 'Fechar o como fazer' : 'Como fazer') + '</button>';
     if (!aberto) return h;
     h += '<div class="guia">';
-    if (window.Guias && Guias.tem(ex.id)) {
+    if (window.Guias && Guias.temFoto(ex.id)) {
+      h += Guias.fotos(ex.id) +
+        '<p class="ex-meta">Onde sentir: ' + esc(Guias.sente(ex.id)) + '</p>' +
+        '<ul class="guia-dicas">' + Guias.dicas(ex.id).map((d) => '<li>' + esc(d) + '</li>').join('') + '</ul>';
+    } else if (window.Guias && Guias.tem(ex.id)) {
       h += Guias.svg(ex.id) +
         '<p class="ex-meta">Onde sentir: ' + esc(Guias.sente(ex.id)) + '</p>' +
         '<ul class="guia-dicas">' + Guias.dicas(ex.id).map((d) => '<li>' + esc(d) + '</li>').join('') + '</ul>';
@@ -1260,7 +1269,10 @@ h2.display { font-size: 34px; }
     st.pronto = true;
     iniciarSessao();
     render();
-    atualizarDaPlanilha().then(() => agendarEnvio(0));
+    atualizarDaPlanilha().then(() => {
+      agendarEnvio(0);
+      if (window.Guias) { const p = plano(); Guias.guardarFotos(p.A.concat(p.B).map((e) => e.id)); }
+    });
     window.addEventListener('online', () => { st.erroSync = null; agendarEnvio(0); });
     window.addEventListener('offline', atualizarStatus);
     document.addEventListener('visibilitychange', () => {

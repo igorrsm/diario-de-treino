@@ -1,6 +1,6 @@
 // Guarda o app no celular para abrir sem internet.
 // Ao mudar qualquer arquivo do app, aumente a VERSAO para os celulares baixarem de novo.
-const VERSAO = 'diario-v2';
+const VERSAO = 'diario-v3';
 const ARQUIVOS = [
   './',
   './index.html',
@@ -12,6 +12,7 @@ const ARQUIVOS = [
   './icons/icon-maskable-512.png'
 ];
 const FONTES = 'diario-fontes';
+const FOTOS = 'diario-fotos';
 
 self.addEventListener('install', (ev) => {
   ev.waitUntil(caches.open(VERSAO).then((c) => c.addAll(ARQUIVOS)).then(() => self.skipWaiting()));
@@ -20,7 +21,7 @@ self.addEventListener('install', (ev) => {
 self.addEventListener('activate', (ev) => {
   ev.waitUntil(
     caches.keys()
-      .then((nomes) => Promise.all(nomes.filter((n) => n !== VERSAO && n !== FONTES).map((n) => caches.delete(n))))
+      .then((nomes) => Promise.all(nomes.filter((n) => n !== VERSAO && n !== FONTES && n !== FOTOS).map((n) => caches.delete(n))))
       .then(() => self.clients.claim())
   );
 });
@@ -46,6 +47,18 @@ self.addEventListener('fetch', (ev) => {
       const guardada = await c.match(req);
       const rede = fetch(req).then((r) => { c.put(req, r.clone()); return r; }).catch(() => guardada);
       return guardada || rede;
+    }));
+    return;
+  }
+
+  // Fotos dos exercícios: usa a guardada no celular; sem ela, busca e guarda.
+  if (url.hostname === 'raw.githubusercontent.com' && url.pathname.indexOf('/yuhonas/free-exercise-db/') === 0) {
+    ev.respondWith(caches.open(FOTOS).then(async (c) => {
+      const guardada = await c.match(req.url);
+      if (guardada) return guardada;
+      const r = await fetch(req.url, { mode: 'no-cors' });
+      c.put(req.url, r.clone());
+      return r;
     }));
     return;
   }

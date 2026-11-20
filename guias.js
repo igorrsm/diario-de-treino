@@ -186,6 +186,60 @@
     }
   };
 
+
+  /* Fotos de referência (free-exercise-db): duas posições por exercício, alternando.
+     Carregadas do repositório original e guardadas só no celular para uso offline. */
+  const BASE_FOTOS = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
+  const FOTOS = {
+    'leg-press': 'Leg_Press',
+    'supino-maquina': 'Machine_Bench_Press',
+    'puxada-frontal': 'Wide-Grip_Lat_Pulldown',
+    'cadeira-flexora': 'Seated_Leg_Curl',
+    'desenvolvimento-maquina': 'Leverage_Shoulder_Press',
+    'prancha': 'Plank',
+    'agachamento-goblet': 'Goblet_Squat',
+    'remada-sentada': 'Seated_Cable_Rows',
+    'supino-inclinado-halteres': 'Incline_Dumbbell_Press',
+    'elevacao-pelvica': 'Butt_Lift_Bridge',
+    'triceps-corda': 'Triceps_Pushdown_-_Rope_Attachment',
+    'rosca-direta': 'Barbell_Curl',
+    'stiff-halteres': 'Stiff-Legged_Dumbbell_Deadlift'
+  };
+  const fotoUrl = (id, n) => BASE_FOTOS + encodeURIComponent(FOTOS[id]) + '/' + n + '.jpg';
+  const CACHE_FOTOS = 'diario-fotos';
+
+  function guardarFotos(ids) {
+    if (!('caches' in window) || navigator.onLine === false) return;
+    caches.open(CACHE_FOTOS).then((c) => {
+      ids.filter((id) => FOTOS[id]).forEach((id) => [0, 1].forEach((n) => {
+        const url = fotoUrl(id, n);
+        c.match(url).then((tem) => {
+          if (tem) return;
+          fetch(url, { mode: 'no-cors' }).then((r) => c.put(url, r)).catch(() => {});
+        });
+      }));
+    }).catch(() => {});
+  }
+
+  function fotos(id) {
+    return '<div class="guia-fotos" data-fotos="' + id + '" aria-label="Posição inicial e final do movimento">' +
+      '<img src="' + fotoUrl(id, 0) + '" alt="Posição inicial" loading="lazy" class="on">' +
+      '<img src="' + fotoUrl(id, 1) + '" alt="Posição final" loading="lazy">' +
+      '<span class="guia-rotulo">Posição 1</span></div>';
+  }
+  let timerFotos = null;
+  function alternarFotos() {
+    const caixas = document.querySelectorAll('.guia-fotos');
+    if (!caixas.length) { clearInterval(timerFotos); timerFotos = null; return; }
+    caixas.forEach((cx) => {
+      const imgs = cx.querySelectorAll('img');
+      const fim = imgs[0].classList.contains('on');
+      imgs[0].classList.toggle('on', !fim);
+      imgs[1].classList.toggle('on', fim);
+      cx.querySelector('.guia-rotulo').textContent = fim ? 'Posição 2' : 'Posição 1';
+    });
+  }
+
   function quadro(id, t) {
     const g = G[id];
     const p = mistura(g.a, g.b, t);
@@ -216,12 +270,16 @@
   const semMovimento = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   window.Guias = {
+    temFoto: (id) => !!FOTOS[id],
+    fotos: fotos,
+    guardarFotos: guardarFotos,
     tem: (id) => !!G[id],
     dicas: (id) => (G[id] ? G[id].dicas : []),
     sente: (id) => (G[id] ? G[id].sente : ''),
     svg: (id) => '<svg class="guia-svg" viewBox="0 0 220 150" role="img" aria-label="Animação do movimento"><g data-guia="' + id + '">' + quadro(id, 0) + '</g></svg>',
     quadro: quadro,
     animar: function (raiz) {
+      if ((raiz || document).querySelector('.guia-fotos') && !timerFotos && !semMovimento()) timerFotos = setInterval(alternarFotos, 1400);
       (raiz || document).querySelectorAll('g[data-guia]').forEach((el) => {
         if (semMovimento()) { el.dataset.pausado = '1'; return; }
         ativos.add(el);
