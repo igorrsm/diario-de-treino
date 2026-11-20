@@ -205,6 +205,21 @@
     'rosca-direta': 'Barbell_Curl',
     'stiff-halteres': 'Stiff-Legged_Dumbbell_Deadlift'
   };
+  // Um vídeo em português por exercício, escolhido pelo título e pela descrição.
+  const VIDEOS = {
+    'leg-press': 'itJDw9I1qu4',
+    'supino-maquina': 'rfbmQ1os7E8',
+    'puxada-frontal': 'BOW9my4J_ek',
+    'cadeira-flexora': 'CHsaztLSSrc',
+    'desenvolvimento-maquina': 'Q7K6DI9R-A8',
+    'prancha': 'Y0plG7gfHVE',
+    'agachamento-goblet': 'DF9sXArkDUw',
+    'remada-sentada': '2YebbYuuBJQ',
+    'supino-inclinado-halteres': 'G-i3jMIbDmo',
+    'elevacao-pelvica': 'np35bxrQqRI',
+    'triceps-corda': '7le1JRUUagM',
+    'rosca-direta': '85f7ODu2ztA'
+  };
   const fotoUrl = (id, n) => BASE_FOTOS + encodeURIComponent(FOTOS[id]) + '/' + n + '.jpg';
   const CACHE_FOTOS = 'diario-fotos';
 
@@ -271,6 +286,7 @@
 
   window.Guias = {
     temFoto: (id) => !!FOTOS[id],
+    video: (id) => (VIDEOS[id] ? 'https://www.youtube.com/watch?v=' + VIDEOS[id] : null),
     fotos: fotos,
     guardarFotos: guardarFotos,
     tem: (id) => !!G[id],

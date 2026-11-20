@@ -731,7 +731,10 @@ h2.display { font-size: 34px; }
     } else {
       h += '<p class="note">Ainda não tenho a animação deste exercício.</p>';
     }
-    h += '<a class="guia-video" href="' + busca + '" target="_blank" rel="noopener">Ver vídeos no YouTube (precisa de internet)</a></div>';
+    const video = window.Guias && Guias.video(ex.id);
+    h += video
+      ? '<a class="guia-video" href="' + video + '" target="_blank" rel="noopener">Ver vídeo explicando (precisa de internet)</a></div>'
+      : '<a class="guia-video" href="' + busca + '" target="_blank" rel="noopener">Procurar vídeos no YouTube (precisa de internet)</a></div>';
     return h;
   }
 
