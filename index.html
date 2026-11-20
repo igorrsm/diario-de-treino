@@ -203,6 +203,21 @@ h2.display { font-size: 34px; }
 .sync.pend .dot { background: var(--gold); }
 .sync.off .dot { background: var(--faint); }
 .sync.erro .dot { background: var(--danger); }
+.guia-btn { align-self: flex-start; color: var(--gold); padding: 4px 0; min-height: 40px; }
+.guia { display: flex; flex-direction: column; gap: 8px; background: var(--bg); border-radius: 4px; padding: 12px; }
+.guia-svg { width: 100%; max-width: 360px; height: auto; display: block; margin: 0 auto; }
+.guia-svg .osso { stroke: var(--fg); stroke-width: 5; stroke-linecap: round; }
+.guia-svg .tronco { stroke-width: 7; }
+.guia-svg .cabeca { fill: var(--fg); }
+.guia-svg .junta { fill: var(--bg); }
+.guia-svg .chao { stroke: var(--line-2); stroke-width: 2; }
+.guia-svg .eq { fill: var(--line-2); stroke: var(--line-2); stroke-width: 3; stroke-linecap: round; }
+.guia-svg .eq-largo { stroke: var(--line); stroke-width: 9; stroke-linecap: round; }
+.guia-svg .eq-fino { stroke: var(--line-2); stroke-width: 2.5; }
+.guia-svg .eq-forte { fill: var(--gold); stroke: var(--gold); stroke-width: 2.5; stroke-linecap: round; }
+.guia-svg .cabo { stroke: var(--faint); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.guia-dicas { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.guia-video { color: var(--muted); font-size: 13px; padding: 6px 0; }
 .cx-field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 .cx-field .field { font-size: 15px; text-align: left; padding: 0 12px; height: 46px; }
 </style>
@@ -231,6 +246,7 @@ h2.display { font-size: 34px; }
 </div>
 <div class="toast" id="toast" role="status" hidden></div>
 
+<script src="guias.js"></script>
 <script>
 (function () {
   'use strict';
@@ -575,6 +591,7 @@ h2.display { font-size: 34px; }
     else if (st.aba === 'historico') html += viewHistorico();
     else html += viewTreino();
     app.innerHTML = html;
+    if (window.Guias) Guias.animar(app);
   }
 
   function avisos() {
@@ -627,6 +644,7 @@ h2.display { font-size: 34px; }
         '<div class="ex-head"><span class="plate" aria-hidden="true" style="background:' + pl.bg + ';color:' + pl.fg + '">' + (i + 1) + '</span>' +
         '<div style="flex:1;min-width:0"><h2 class="ex-name">' + esc(ex.nome) + '</h2>' +
         '<p class="ex-meta">' + esc(metaTexto(ex, fase)) + '</p><p class="ex-meta">' + esc(textoUltima(ex)) + '</p></div></div>';
+      h += blocoGuia(ex);
       if (ex.tipo === 'tempo') {
         h += '<div class="grid-head" style="grid-template-columns:44px minmax(0,1fr) 52px"><span>Série</span><span>Segundos</span><span></span></div>';
       } else {
@@ -688,6 +706,24 @@ h2.display { font-size: 34px; }
       h += '<button type="button" class="chip" style="min-height:44px;font-family:var(--display);font-weight:700;font-size:18px" data-acao="checkin" data-campo="' + campo + '" data-v="' + n + '" aria-pressed="' + (v === n) + '" aria-label="' + n + ', ' + ESCALA_ROTULO[n] + '">' + n + '</button>';
     }
     return h + '</div></div>';
+  }
+
+  /* ---------- Como fazer ---------- */
+  function blocoGuia(ex) {
+    const aberto = !!(st.guias && st.guias[ex.id]);
+    const busca = 'https://www.youtube.com/results?search_query=' + encodeURIComponent('como fazer ' + ex.nome + ' execução correta');
+    let h = '<button type="button" class="link-btn guia-btn" data-acao="guia" data-ex="' + esc(ex.id) + '" aria-expanded="' + aberto + '">' + (aberto ? 'Fechar o como fazer' : 'Como fazer') + '</button>';
+    if (!aberto) return h;
+    h += '<div class="guia">';
+    if (window.Guias && Guias.tem(ex.id)) {
+      h += Guias.svg(ex.id) +
+        '<p class="ex-meta">Onde sentir: ' + esc(Guias.sente(ex.id)) + '</p>' +
+        '<ul class="guia-dicas">' + Guias.dicas(ex.id).map((d) => '<li>' + esc(d) + '</li>').join('') + '</ul>';
+    } else {
+      h += '<p class="note">Ainda não tenho a animação deste exercício.</p>';
+    }
+    h += '<a class="guia-video" href="' + busca + '" target="_blank" rel="noopener">Ver vídeos no YouTube (precisa de internet)</a></div>';
+    return h;
   }
 
   function viewConcluido(s) {
@@ -1088,6 +1124,12 @@ h2.display { font-size: 34px; }
       salvarSessao(); render(); window.scrollTo(0, 0); return;
     }
     if (acao === 'reabrir') { s.status = 'andamento'; delete s.concluidoEm; st.aberto = primeiroAberto(s); salvarSessao(); render(); return; }
+    if (acao === 'guia') {
+      lerCampos();
+      st.guias = st.guias || {};
+      st.guias[b.dataset.ex] = !st.guias[b.dataset.ex];
+      render(); return;
+    }
     if (acao === 'ex-evo') { st.exEvo = b.dataset.ex; render(); return; }
     if (acao === 'checkin') {
       lerCampos();
